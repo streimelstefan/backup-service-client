@@ -1,0 +1,16 @@
+server:
+  ipAddress: 127.0.0.1
+  port: 3000
+  id: 'uijknvkladjfkdlfwfdbfnjhuisfjklbcnmakhdfgjdklsa'
+  pwd: 'fdhajkl2bf8doasvbjfoaz72381bfhjdkashf3u1iobfhdjask'
+
+jobs:
+  - email
+
+email:
+  scriptId: 0
+  calledPerDay: 4
+  timeout: 20000
+  calledPerMonth: 1
+  calledPerYear: 2
+  saveLocation: ""

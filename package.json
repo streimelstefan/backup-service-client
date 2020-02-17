@@ -1,0 +1,19 @@
+{
+  "name": "backup-service-client",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.streimel.com:the-awsome-ones/backup-service/backup-service-client.git"
+  },
+  "author": "",
+  "license": "Apache 2.0",
+  "dependencies": {
+    "request": "^2.88.2",
+    "yaml": "^1.7.2"
+  }
+}
