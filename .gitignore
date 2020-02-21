@@ -4,11 +4,11 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-./logs/
+logs/
 
 
 #backup folder
-./backups/
+backups/
 # Runtime data
 pids
 *.pid
