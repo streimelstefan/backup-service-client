@@ -11,6 +11,10 @@ if (fs.existsSync('config.yml')) {
 
     console.log(config);
 
+    if (!fs.existsSync('backups')) {
+        fs.mkdirSync('backups');
+    }
+
     console.log('Authenticating on Server');
 
     const basicURL = `http://${config.server.ipAddress}:${config.server.port}/`
