@@ -13,7 +13,10 @@ if (fs.existsSync('config.yml')) {
 
     console.log('Authenticating on Server');
 
-    request.post(`http://${config.server.ipAddress}:${config.server.port}/v1/auth/login`, {
+    const basicURL = `http://${config.server.ipAddress}:${config.server.port}/`
+
+
+    request.post(`${basicURL}v1/auth/login`, {
             json: {
                 uid: config.server.id,
                 pwd: config.server.pwd
@@ -23,14 +26,20 @@ if (fs.existsSync('config.yml')) {
             console.error(error)
             return;
         }
-        console.log(`statusCode: ${res.statusCode}`)
+
+        let cookie = res.headers['set-cookie'];
+
+        console.log('cookie = ' + cookie);
+        let headers = {'Cookie': cookie};
         console.log(body)
 
         config.jobs.forEach(job => {
             const timeout = getTimeout(job);
             console.log(`Timeout for job ${job} = ${timeout}`);
 
-            request.post(`http://${config.server.ipAddress}:${config.server.port}/v1/scripts/${config[job].scriptId}/register`, {},
+            request.post(
+                `${basicURL}v1/scripts/${config[job].scriptId}/register`,
+                {headers: headers},
                 (error, res, body) => {
                 if (error) {
                     console.error(error)
@@ -39,12 +48,15 @@ if (fs.existsSync('config.yml')) {
                 console.log(`statusCode: ${res.statusCode}`)
                 console.log(body)
 
-                config[job].workerId = res.body.workerId;
+                const jBody = JSON.parse(body);
+
+                config[job].workerId = jBody['workerId'];
+                console.log(config[job].workerId);
 
                 if (res.statusCode === 200) {
-                    console.log('Register Script succesfully. Worker Id is: ' + res.body.workerId)
-                    runJob(config[job]);
-                    setInterval(() => {runJob(config[job])}, timeout);
+                    console.log('Register Script succesfully. Worker Id is: ' + config[job].workerId)
+                    runJob(config[job], headers);
+                    setInterval(() => {runJob(config[job], headers)}, timeout);
                 } else {
                     process.exit()
                 }
@@ -76,17 +88,79 @@ function getTimeout(job) {
     return timeout;
 }
 
-function runJob(job) {
-    console.log('Running job with script id ' + job.scriptId);
+function runJob(job, header) {
+    console.log('=====================================================');
+    console.log('Running job with worker id ' + job.workerId);
+    console.log('=====================================================');
+    console.log(JSON.stringify(job));
+    console.log(header);
 
-    request.post(`http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/restart`, {
-        }, (error, res, body) => {
+    request.post(
+        `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/restart`,
+        {headers: header},
+        (error, res, body) => {
         if (error) {
             console.error(error)
             return;
         }
         console.log(`statusCode: ${res.statusCode}`)
         console.log(body)
+    });
 
+    const stuff = setTimeout(() => {
+        console.log('Reqeusting the state of the worker!');
+        request.get(
+            `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/state`,
+            {headers: header},
+            (error, res, body) => {
+            if (error) {
+                console.error(error)
+                return;
+            }
+            console.log(`statusCode: ${res.statusCode}`);
+            console.log('Statebody = ' + JSON.stringify(body));
+
+            if (body.state = 'SUCCESS') {
+                stuff.unref();
+
+                console.log('Finished Execution');
+
+                getBackupFile(job, header);
+
+            }
+        });
+    }, 1000);
+}
+
+function getBackupFile(job, header) {
+    request.get(
+        `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/getBackupFile`,
+        {headers: header},
+        (error, res, body) => {
+        if (error) {
+            console.error(error)
+            return;
+        }
+        console.log(`statusCode: ${res.statusCode}`);
+        console.log('file Body = ' + JSON.stringify(body));
+
+        fs.writeFileSync(__dirname + `/backups/back-${job.workerId}.bak.zip`, body);
+
+        deleteBackupFile(job, header);
+    });
+}
+
+
+function deleteBackupFile(job, header) {
+    request.delete(
+        `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/backup`,
+        {headers: header},
+        (error, res, body) => {
+        if (error) {
+            console.error(error)
+            return;
+        }
+        console.log(`statusCode: ${res.statusCode}`);
+        console.log('delete Body = ' + JSON.stringify(body));
     });
 }
