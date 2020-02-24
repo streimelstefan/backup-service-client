@@ -10,7 +10,7 @@ jobs:
 email:
   scriptId: 0
   calledPerDay: 4
-  timeout: 20000
+  timeout: 20000000
   calledPerMonth: 1
   calledPerYear: 2
   saveLocation: ""

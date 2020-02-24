@@ -111,7 +111,7 @@ function runJob(job, header) {
         console.log(body)
     });
 
-    const stuff = setTimeout(() => {
+    const stuff = setInterval(() => {
         console.log('Reqeusting the state of the worker!');
         request.get(
             `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/state`,
@@ -122,10 +122,12 @@ function runJob(job, header) {
                 return;
             }
             console.log(`statusCode: ${res.statusCode}`);
-            console.log('Statebody = ' + JSON.stringify(body));
+            console.log('Statebody = ' + body);
+            body = JSON.parse(body);
+            console.log(body.state);
 
-            if (body.state = 'SUCCESS') {
-                stuff.unref();
+            if (body.state == 'SUCCESS' || body.state == 'PASSIVE') {
+                clearInterval(stuff);
 
                 console.log('Finished Execution');
 
