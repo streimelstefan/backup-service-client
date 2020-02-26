@@ -1,126 +1,134 @@
-const fs = require('fs');
 const YAML = require('yaml');
 const request = require('request');
-const http = require('http');
+const logger = require('./src/logger');
+const Job = require('./src/job').Job;
+const jobList = require('./src/job').JobList;
+const fs = require('fs');
 
-let config = {};
+global.config = {};
+
+logger.info('Starting Client');
+
+/*logger.warn('test');
+logger.error('error');
+logger.verbose('teswt');
+logger.debug('test');
+*/
 
 // Checking if config file exists
-console.log('[STARTUP][LOG]: Checking if a config exists');
+logger.debug('index.startup: Checking if a config file was provided.');
 if (fs.existsSync('config.yml')) {
+    logger.info('index.startup: user provided a config file');
+    logger.debug('index.startup: starting to read config');
     config = YAML.parse(fs.readFileSync('config.yml').toString());
+    logger.verbose(`index.startup: config content = ${JSON.stringify(config)}`);
 
-    console.log(`[STARTUP][LOG]: config = ${config}`);
-
+    logger.debug('index.startup: checking if the backup folder exists');
     if (!fs.existsSync('backups')) {
+        logger.debug('index.startup: backup folder does not exist, creating it now');
         fs.mkdirSync('backups');
     }
 
-    console.log(`[STARTUP][LOG]: Authenticating on Server`);
+    logger.info('index.startup: trying to authenticate on the Server');
 
-    const basicURL = `http://${config.server.ipAddress}:${config.server.port}/`
+    config.basicURL = `http://${config.server.ipAddress}:${config.server.port}/`
+    logger.verbose(`index.startup: baseurl = ${config.basicURL}`);
 
+    authenticateOnServer();
 
-    request.post(`${basicURL}v1/auth/login`, {
-            json: {
-                uid: config.server.id,
-                pwd: config.server.pwd
-            }
-        }, (error, res, body) => {
-        if (error) {
-            console.error('[STARTUP][LOG]: An error accoured during the login reqeust: ' + error);
-            return;
-        }
-
-        let cookie = res.headers['set-cookie'];
-
-        console.log('[STARTUP][LOG]: cookie = ' + cookie);
-        let headers = {'Cookie': cookie};
-
-        config.jobs.forEach(job => {
-            const timeout = getTimeout(job);
-            console.log(`[STARTUP][LOG]: Timeout for job ${job} = ${timeout}`);
-
-            request.post(
-                `${basicURL}v1/scripts/${config[job].scriptId}/register`,
-                {headers: headers},
-                (error, res, body) => {
-                if (error) {
-                    console.error(error)
-                    return;
-                }
-                console.log(`[STARTUP][LOG]: statusCode: ${res.statusCode}`)
-
-                const jBody = JSON.parse(body);
-
-                config[job].workerId = jBody['workerId'];
-                console.log(config[job].workerId);
-
-                if (res.statusCode === 200) {
-                console.log(body)
-                    console.log('[STARTUP][LOG]: Register Script succesfully. Worker Id is: ' + config[job].workerId)
-                    runJob(config[job], headers);
-                    setInterval(() => {runJob(config[job], headers)}, timeout);
-                } else {
-                    process.exit()
-                }
-            });
-        });
-    });
+    
 
 } else {
     console.log('Config does not exist');
     // TODO: add stuff so the config can be made on first startup
 }
 
+function authenticateOnServer() {
+    logger.debug(`index.authentication: calling ${config.basicURL}v1/auth/login to authenticate`);
+    request.post(`${config.basicURL}v1/auth/login`, {
+            json: {
+                uid: config.server.id,
+                pwd: config.server.pwd
+            }
+        }, (error, res, body) => {
+        if (error) {
+            logger.error('index.authentication: an Error accoured trying to authenticate on the Server: ' + error);
+            process.exit(1);
+        }
+
+        if (res.statusCode === 200) {
+            
+            logger.debug('index.authentication: getting set cookie from response');
+            let cookie = res.headers['set-cookie'];
+            logger.verbose(`index.authentication: set cookie content = ${JSON.stringify(cookie)}`)
+            
+            logger.debug('index.authentication: settomg config.header');
+            config.headers = {'Cookie': cookie};
+            
+            logger.info('index.authentication: Authentication successful');
+            
+            createJobs();
+
+        } else if (res.statusCode === 401) {
+            logger.error('index.authentication: Server answered with status code 401: Wrong Credentials. So the Credentials or the Server address need to be wrong!');
+            process.exit(1);
+        } else if (res.statusCode === 500) {
+            logger.error('index.authentication: While trying to athenticate the Server had an internal Error, please check the Servers error log for more information.');
+            process.exit(1);
+        } else {
+            logger.error('index.authentication: The Server answered with an unknown status code please make sure to Server adress is right.');
+            process.exit(1);
+        }
+    });
+}
+
+function createJobs() {
+    logger.debug('index.createJobs: starting to create Jobs');
+    config.jobs.forEach(job => {
+
+        logger.debug(`index.createJobs: getting Timeout for job: ${job}`);
+        const timeout = getTimeout(job);
+
+        logger.debug(`index.createJobs: getting scriptId of job: ${job}`);
+        const scriptId = config[job].scriptId;
+
+        logger.verbose(`index.createJob: creating job with data: {jobName: ${job}; scriptId: ${scriptId}; timeout: ${timeout}}`);
+        jobList.push(new Job(job, scriptId, timeout));
+    });
+
+    logger.info('index.createJobs: finished craeting Jobs registering them now on the Server');
+    registerJobs();
+}
+
+function registerJobs() {
+    logger.debug('index.reigsterJobs: Starting to register the scripts');
+    jobList.forEach(job => {
+        job.registerJob();
+    });
+}
+
 function getTimeout(job) {
+    logger.debug(`index.getTimeout: Starting to get Timout of job ${job} in priority from hight to low: timout > calledPerDay > calledPerMonth > calledPerYear`);
     let timeout = 0;
 
     if (config[job].calledPerYear) {
+        logger.debug(`index.getTimeout: Job has calledPerYear defined with value: ${config[job].calledPerYear}`);
         timeout = 31556952000 / config[job].calledPerYear;
     }
     if (config[job].calledPerMonth) {
+        logger.debug(`index.getTimeout: Job has calledPerMonth defined with value: ${config[job].calledPerMonth}`);
         timeout = 2592000000 / config[job].calledPerMonth;
     }
     if (config[job].calledPerDay) {
+        logger.debug(`index.getTimeout: Job has calledPerDay defined with value: ${config[job].calledPerDay}`);
         timeout = 86400000 / config[job].calledPerDay;
     }
     if (config[job].timeout) {
+        logger.debug(`index.getTimeout: Job has timeout defined with value: ${config[job].timeout}`);
         timeout = config[job].timeout;
     }
 
     return timeout;
-}
-
-function runJob(job, header) {
-    console.log(`[JOB-${job.workerId}][LOG]: Running job with worker id ${job.workerId}`);
-    console.log(`[JOB-${job.workerId}][LOG][RESTART]: Requesting to restart the Worker`)
-    console.log(`[JOB-${job.workerId}][LOG][RESTART]: Job Payload = ${JSON.stringify(job)}`);
-    console.log(`[JOB-${job.workerId}][LOG][RESTART]: Job Header = ${header}`);
-
-    const restartIntervalId = setInterval(async () => {
-
-        await request.post(
-            `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/restart`,
-            {headers: header},
-            (error, res, body) => {
-                if (error) {
-                    console.error(`[JOB-${job.workerId}][ERROR][RESTART]: An error accoured during the request: ${error}`);
-                    return;
-                }
-                console.log(`[JOB-${job.workerId}][LOG][RESTART]: Response statusCode: ${res.statusCode}`)
-
-                if (res.statusCode === 200) {
-                    console.log(`[JOB-${job.workerId}][LOG][RESTART]: Started Worker`);
-                    clearInterval(restartIntervalId);
-                    waitTillWorkerFinished(job, header);
-                } else {
-                    console.log(`[JOB-${job.workerId}][LOG][RESTART]: Worker not ready yet retrying in 5 seconds.`);
-                }
-            });
-    }, 10000);
-
-    
 }
 
 function waitTillWorkerFinished(job, header) {
@@ -150,39 +158,4 @@ function waitTillWorkerFinished(job, header) {
             }
         });
     }, 5000);
-}
-
-function getBackupFile(job, header) {
-    console.log(`[JOB-${job.workerId}][LOG][GETFILE]: Reqeusting file download`);
-    request.post(`http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/getBackupFile`,
-        {headers: header, encoding: null},
-        (error, res, body) => {
-        if (error) {
-            console.error(`[JOB-${job.workerId}][ERROR][GETFILE]: An error accoured doring the reqeust: ${error}`)
-            return;
-        }
-        console.log(`[JOB-${job.workerId}][LOG][GETFILE]: Request statusCode: ${res.statusCode}`);
-
-        fs.writeFileSync(__dirname + `/backups/back-${job.workerId}.bak.zip`, body);
-
-        deleteBackupFile(job, header);
-
-    });
-
-}
-
-
-function deleteBackupFile(job, header) {
-    console.log(`[JOB-${job.workerId}][LOG][BACKDELETE]: Reqeusting to delete the backup from the server.`);
-    request.delete(
-        `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/backup`,
-        {headers: header},
-        (error, res, body) => {
-        if (error) {
-            console.error(`[JOB-${job.workerId}][ERROR][BACKDELETE]: An error accoured during the reqeust: ${error}`);
-            return;
-        }
-        console.log(`[JOB-${job.workerId}][LOG][BACKDELETE]: statusCode: ${res.statusCode}`);
-        console.log(`[JOB-${job.workerId}][LOG][BACKDELETE]: delete Body = ${JSON.stringify(body)}`);
-    });
 }

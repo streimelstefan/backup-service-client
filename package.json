@@ -15,6 +15,7 @@
   "license": "Apache 2.0",
   "dependencies": {
     "request": "^2.88.2",
+    "winston": "^3.2.1",
     "yaml": "^1.7.2"
   }
 }
