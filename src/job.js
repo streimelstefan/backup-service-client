@@ -4,11 +4,12 @@ const fs = require('fs');
 
 class Job {
 
-    constructor(jobname, scriptId, timeout) {
+    constructor(jobname, scriptId, timeout, deleteAfter = -1) {
         this.jobname = jobname;
         this.scriptId = scriptId;
         this.workerId = -1;
         this.timeout = timeout;
+        this.deleteAfter = deleteAfter;
     }
 
     registerJob() {
@@ -119,8 +120,10 @@ class Job {
             if (res.statusCode === 200) {
                 logger.debug('src.job.getBackupFile: download finished writing file to disk');
 
-                fs.writeFileSync(__dirname + `/../backups/back-${this.jobname}.bak.zip`, body);
+                fs.writeFileSync(__dirname + `/../backups/${this.jobname}/back-${this.jobname}-${new Date().toDateString()}.bak.zip`, body);
                 
+                this.deleteOldBackups();
+
                 this.deleteBackupFile();
             } else if (res.statusCode === 500) {
                 logger.error('src.job.getBackupFile: While trying to get the backupfile of the Worker the Server had an interal error, please check the servers error log for more information');
@@ -128,6 +131,16 @@ class Job {
             }
         });
     
+    }
+
+    deleteOldBackups() {
+        fs.readdir(testFolder, (err, files) => {
+            if (files.length >= this.deleteAfter) {
+                files.forEach(file => {
+                    console.log(file);
+                });
+            }
+        });
     }
 
     

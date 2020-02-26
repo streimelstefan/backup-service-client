@@ -14,3 +14,4 @@ email:
   calledPerMonth: 1
   calledPerYear: 2
   saveLocation: ""
+  deleteAfter: 3

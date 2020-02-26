@@ -92,8 +92,16 @@ function createJobs() {
         logger.debug(`index.createJobs: getting scriptId of job: ${job}`);
         const scriptId = config[job].scriptId;
 
-        logger.verbose(`index.createJob: creating job with data: {jobName: ${job}; scriptId: ${scriptId}; timeout: ${timeout}}`);
-        jobList.push(new Job(job, scriptId, timeout));
+        logger.debug(`index.createJobs: getting deleteAfter of job: ${job}`);
+        const deleteAfter = config[job].deleteAfter;
+
+        if (!fs.existsSync(`backups/${job}`)) {
+            logger.debug(`index.startup: creating backup folder for job ${job}`);
+            fs.mkdirSync(`backups/${job}`);
+        }
+
+        logger.verbose(`index.createJob: creating job with data: {jobName: ${job}; scriptId: ${scriptId}; timeout: ${timeout}; deleteAfter: ${deleteAfter}}`);
+        jobList.push(new Job(job, scriptId, timeout, deleteAfter));
     });
 
     logger.info('index.createJobs: finished craeting Jobs registering them now on the Server');
