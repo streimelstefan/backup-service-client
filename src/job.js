@@ -60,7 +60,7 @@ class Job {
 
                 if (res.statusCode === 200) {
                     logger.info(`src.job.runJob: successfully restarted worker for job ${this.jobname}`);
-                    
+
                     this.waitTillWorkerFinished();
                 } else if (res.statusCode === 403) {
                     logger.warn(`src.job.runJob: The worker was not release yet. You should set the timout for the job ${this.jobname} higher to avoid this collision and load on the Server. Retrying to start worker in one minute!`);
@@ -70,7 +70,7 @@ class Job {
                     process.exit(1);
                 }
             });
-        
+
     }
 
     waitTillWorkerFinished() {
@@ -91,8 +91,8 @@ class Job {
                     if (body.state == 'SUCCESS' || body.state == 'PASSIVE') {
                         logger.info(`src.job.waitTillWorkerFinished: worker of job ${this.jobname} finished running.`);
                         clearInterval(stuff);
-                        
-                        
+
+
                         this.getBackupFile();
                     } else {
                         logger.verbose(`src.job.waitTillWorkerFinished: worker of job ${this.jobname} is still runnning. Trying again in 5 seconds.`);
@@ -116,12 +116,12 @@ class Job {
                 logger.error(`src.job.getBackupFile: An Error accoured trying get the backup of job ${this.jobname}: ${error}`);
                 process.exit(1);
             }
-            
+
             if (res.statusCode === 200) {
                 logger.debug('src.job.getBackupFile: download finished writing file to disk');
 
-                fs.writeFileSync(__dirname + `/../backups/${this.jobname}/back-${this.jobname}-${new Date().toDateString()}.bak.zip`, body);
-                
+                fs.writeFileSync(__dirname + `/../backups/${this.jobname}/back-${this.jobname}-${new Date().toISOString().split(':').join('-').replace('.', '-')}.bak.zip`, body);
+
                 this.deleteOldBackups();
 
                 this.deleteBackupFile();
@@ -130,20 +130,55 @@ class Job {
                 process.exit(1);
             }
         });
-    
+
     }
 
     deleteOldBackups() {
-        fs.readdir(testFolder, (err, files) => {
+        let dateArr = []
+
+        fs.readdir(__dirname + `/../backups/${this.jobname}`, (err, files) => {
             if (files.length >= this.deleteAfter) {
+                logger.info('src.job.deleteOldBackups: There are backups that need to be deleted')
                 files.forEach(file => {
-                    console.log(file);
+                    dateArr.push({filename: file, timestamp: null});
+
+                    /*
+                        This block reformats the date format from the filename into the ISOS Fileformat
+                        It splits ups the files adds - to between the first three parameters than
+                        adds : between the third until the tith element and then adds a . between the fith and the sith
+
+                        gets:
+
+                        X-X-X-X-X-X
+
+                        returns
+
+                        X-X-X:X:X.X
+
+                    */
+                    file = file.split('-');
+                    file.splice(0, 2);
+                    file[5] = file[5].split('.')[0];
+                    let date = new Date(file[0] + '-' + file[1] + '-' + file[2] + ':' + file[3] + ':' + file[4] + '.' + file[5]);
+
+                    dateArr[dateArr.length - 1].timestamp = date;
+                });
+
+                // sorts the array so that the oldest files are at the end
+                dateArr.sort((a, b) => b.timestamp - a.timestamp);
+
+                logger.verbose(`src.job.deleteOldBackups: There are ${dateArr.length} files in the backup folder max ammount is ${this.deleteAfter}`);
+
+                dateArr.splice(this.deleteAfter, dateArr.length - this.deleteAfter).forEach(file => {
+                    fs.unlink(`${__dirname}/../backups/${this.jobname}/${file.filename}`, () => {
+                        logger.info(`src.job.deleteOldBackups: Deleted backup ${file.filename} from Client`);
+                    });
                 });
             }
         });
     }
 
-    
+
     deleteBackupFile() {
         logger.info(`src.job.deleteBackupFile: Reqeusting to delete the backup from the server.`);
         logger.debug(`src.job.deleteBackupFile: calling http://${config.server.ipAddress}:${config.server.port}/v1/workers/${this.workerId}/backup to delete the backup form the server.`)

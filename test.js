@@ -1,19 +1,16 @@
 const fs = require('fs');
 
-console.log(__dirname + '/backups/');
 
-console.log(new Date().toISOString().split(':').join('.').split('-').join('.'));
-console.log(new Date().toISOString());
+console.log(new Date().toISOString().split(':').join('-').replace('.', '-'));
 
 fs.readdir(__dirname + '/backups/', (err, files) => {
     //if (files.length >= this.deleteAfter) {
         files.forEach(file => {
-            let time = file.split('-')[2].split('.');
-            time.splice(-2, 2);
-            time = time.join('-');
-            time. = ':';
-            time[16] = ':';
-            console.log(time);
+            file = file.split('-');
+            file.splice(0, 2);
+            file[5] = file[5].split('.')[0];
+            const date = new Date(file[0] + '-' + file[1] + '-' + file[2] + ':' + file[3] + ':' + file[4] + '.' + file[5]);
+            console.log(date);
         });
     //}
 });
