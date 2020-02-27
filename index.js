@@ -138,32 +138,3 @@ function getTimeout(job) {
 
     return timeout;
 }
-
-function waitTillWorkerFinished(job, header) {
-    console.log(`[JOB-${job.workerId}][LOG][WAITINGLOOP]: Waiting till the worker finished running`);
-    const stuff = setInterval(async () => {
-        console.log(`[JOB-${job.workerId}][LOG][WAITINGLOOP]: Reqeusting the state of the worker!`);
-        await request.get(
-            `http://${config.server.ipAddress}:${config.server.port}/v1/workers/${job.workerId}/state`,
-            {headers: header},
-            (error, res, body) => {
-            if (error) {
-                console.error(`[JOB-${job.workerId}][ERROR][WAITINGLOOP]: An error accoured during the request: ${error}`);
-                return;
-            }
-            console.log(`[JOB-${job.workerId}][LOG][WAITINGLOOP]: Reqeust statusCode: ${res.statusCode}`);
-            body = JSON.parse(body);
-
-            if (body.state == 'SUCCESS' || body.state == 'PASSIVE') {
-                clearInterval(stuff);
-
-                console.log(`[JOB-${job.workerId}][LOG][WAITINGLOOP]: Worker finished execution`);
-
-                getBackupFile(job, header);
-
-            } else {
-                console.log(`[JOB-${job.workerId}][LOG][WAITINGLOOP]: Worker isn't finished jet retrying in 5 seconds.`);
-            }
-        });
-    }, 5000);
-}
