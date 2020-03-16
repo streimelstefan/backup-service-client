@@ -35,7 +35,7 @@ class Job {
                 this.runJob();
 
                 logger.debug(`src.job.registerJob: Setting Intervall for future job execution. Interval timout = ${this.timeout}`);
-                setInterval(() => {runJob()}, this.timeout);
+                setInterval(() => {this.runJob()}, this.timeout);
             } else if (res.statusCode === 400) {
                 logger.error(`src.job.registerJob: Server answered with status code 400 and aditional information: ${body}`);
                 process.exit(1);
